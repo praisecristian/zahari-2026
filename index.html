@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Votação do baile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fundo: #24103a;
+    --painel: #341a52;
+    --linha: #5a3a80;
+    --texto: #f6eeff;
+    --suave: #bfa8dc;
+    --ouro: #f2d49b;
+    --sobre-ouro: #2a1442;
+    --erro: #ff9a9a;
+    --ok: #a6e8b8;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--fundo); }
+  body {
+    margin: 0; color: var(--texto);
+    font-family: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 17px; line-height: 1.5;
+    padding: max(24px, env(safe-area-inset-top)) 20px max(40px, env(safe-area-inset-bottom));
+  }
+  main { max-width: 520px; margin: 0 auto; }
+  h1 { font-size: clamp(2.4rem, 11vw, 3.6rem); line-height: 1; font-weight: 800; margin: 24px 0 8px; letter-spacing: -0.02em; }
+  .sub { color: var(--suave); margin: 0 0 32px; }
+  label.campo { display: block; font-weight: 600; margin-bottom: 8px; }
+  input[type="text"] {
+    width: 100%; font: inherit; font-size: 1.6rem; font-weight: 800; letter-spacing: 0.25em;
+    text-transform: uppercase; text-align: center;
+    color: var(--texto); background: var(--painel);
+    border: 2px solid var(--linha); border-radius: 12px; padding: 14px;
+  }
+  input[type="text"]:focus-visible, .opcao input:focus-visible + span, button:focus-visible {
+    outline: 3px solid var(--ouro); outline-offset: 2px;
+  }
+  fieldset { border: 0; padding: 0; margin: 32px 0 0; }
+  legend { font-size: 1.35rem; font-weight: 800; padding: 0; margin-bottom: 12px; }
+  .opcao { display: block; margin-bottom: 10px; cursor: pointer; }
+  .opcao input { position: absolute; opacity: 0; }
+  .opcao span {
+    display: block; padding: 14px 16px; border-radius: 12px; font-weight: 600;
+    background: var(--painel); border: 2px solid var(--linha);
+  }
+  .opcao input:checked + span { background: var(--ouro); color: var(--sobre-ouro); border-color: var(--ouro); }
+  button {
+    width: 100%; margin-top: 36px; font: inherit; font-size: 1.15rem; font-weight: 800;
+    padding: 16px; border: 0; border-radius: 12px; cursor: pointer;
+    background: var(--ouro); color: var(--sobre-ouro);
+  }
+  button:disabled { opacity: .55; cursor: wait; }
+  #msg { min-height: 1.5em; margin-top: 16px; font-weight: 600; text-align: center; }
+  #msg.erro { color: var(--erro); }
+  #msg.ok { color: var(--ok); }
+  .final { text-align: center; padding: 60px 0; }
+  .final p { color: var(--suave); }
+  .oculto { display: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .opcao span { transition: background .15s, color .15s; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="titulo">Vota no baile</h1>
+  <p class="sub" id="sub">A carregar candidatos…</p>
+
+  <div id="formulario" class="oculto">
+    <label class="campo" for="codigo">O teu código</label>
+    <input type="text" id="codigo" maxlength="10" autocomplete="off" autocapitalize="characters" inputmode="text">
+    <div id="categorias"></div>
+    <button id="enviar" type="button">Enviar voto</button>
+    <div id="msg" role="status" aria-live="polite"></div>
+  </div>
+
+  <div id="final" class="final oculto">
+    <h1>Voto registado</h1>
+    <p>Obrigado por votar. Já podes fechar esta página.</p>
+  </div>
+</main>
+
+<script>
+  // 1) Cola aqui o URL da implantação do Apps Script (termina em /exec)
+  const URL_SCRIPT = 'https://script.google.com/macros/s/AKfycbwgbNh249tR0-6sFmxpEW23mSt8b8a9wn0uwBBIsEWLauVYuUB1RYtA2fBbP4RBXpOK/exec' ;
+  // 2) Nome do evento
+  const NOME_EVENTO = 'Zahari 2026';
+
+  const $ = id => document.getElementById(id);
+  let categorias = {};
+
+  document.title = NOME_EVENTO;
+  $('titulo').textContent = NOME_EVENTO;
+
+  function mensagem(texto, tipo) {
+    const m = $('msg');
+    m.textContent = texto;
+    m.className = tipo || '';
+  }
+
+  async function carregar() {
+    try {
+      const r = await fetch(URL_SCRIPT);
+      const d = await r.json();
+      if (!d.aberta) {
+        $('sub').textContent = 'A votação ainda não está aberta. Aguarda o sinal da comissão.';
+        return;
+      }
+      categorias = d.categorias;
+      desenhar();
+      $('sub').textContent = 'Escreve o código que recebeste e escolhe um candidato em cada categoria.';
+      $('formulario').classList.remove('oculto');
+    } catch (e) {
+      $('sub').textContent = 'Não foi possível carregar. Verifica a internet e recarrega a página.';
+    }
+  }
+
+  function desenhar() {
+    const caixa = $('categorias');
+    caixa.textContent = '';
+    Object.keys(categorias).forEach((cat, i) => {
+      const fs = document.createElement('fieldset');
+      const lg = document.createElement('legend');
+      lg.textContent = cat;
+      fs.appendChild(lg);
+      categorias[cat].forEach(nome => {
+        const lb = document.createElement('label');
+        lb.className = 'opcao';
+        const inp = document.createElement('input');
+        inp.type = 'radio'; inp.name = 'cat' + i; inp.value = nome; inp.dataset.cat = cat;
+        const sp = document.createElement('span');
+        sp.textContent = nome;
+        lb.appendChild(inp); lb.appendChild(sp);
+        fs.appendChild(lb);
+      });
+      caixa.appendChild(fs);
+    });
+  }
+
+  $('enviar').addEventListener('click', async () => {
+    const codigo = $('codigo').value.trim().toUpperCase();
+    if (!codigo) return mensagem('Escreve o teu código.', 'erro');
+
+    const votos = {};
+    document.querySelectorAll('input[type="radio"]:checked').forEach(i => { votos[i.dataset.cat] = i.value; });
+    for (const cat of Object.keys(categorias)) {
+      if (!votos[cat]) return mensagem('Falta escolher em: ' + cat + '.', 'erro');
+    }
+
+    $('enviar').disabled = true;
+    mensagem('A enviar…');
+    try {
+      const r = await fetch(URL_SCRIPT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ codigo, votos })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        $('formulario').classList.add('oculto');
+        $('titulo').classList.add('oculto');
+        $('sub').classList.add('oculto');
+        $('final').classList.remove('oculto');
+      } else {
+        mensagem(d.msg, 'erro');
+        $('enviar').disabled = false;
+      }
+    } catch (e) {
+      mensagem('Falha na ligação. Tenta outra vez.', 'erro');
+      $('enviar').disabled = false;
+    }
+  });
+
+  carregar();
+</script>
+</body>
+</html>
